@@ -144,11 +144,6 @@ const processResults = (results) => {
 				all[key] = route;
 		}
 	}
-	for (const key in all) {
-		if (!all[key].hasOwnProperty("peer_address")) {
-			delete all[key];
-		}
-	}
 	const newResults = Object.values(all);
 	newResults.sort((a, b) => {
 		let res;
