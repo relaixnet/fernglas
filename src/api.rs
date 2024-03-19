@@ -18,7 +18,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::Infallible;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -256,9 +256,20 @@ async fn query<T: Store>(
             if let Some(nexthop) = route.attrs.nexthop {
                 if have_resolved.insert(nexthop) {
                     let resolver = resolver.clone();
+                    let mut nexthop_mapped: Option<Ipv4Addr> = None;
+                    match nexthop {
+                        IpAddr::V6(ip6) => {
+                            nexthop_mapped = ip6.to_ipv4_mapped();
+                        }
+                        _ => {},
+                    }
+                    let mut resolve_nexthop = nexthop.clone();
+                    if let Some(nexthop_v4) = nexthop_mapped {
+                       resolve_nexthop = IpAddr::V4(nexthop_v4); 
+                    };
                     futures.push(Box::pin(async move {
                         resolver
-                            .reverse_lookup(nexthop)
+                            .reverse_lookup(resolve_nexthop)
                             .await
                             .ok()
                             .and_then(|reverse| reverse.iter().next().map(|x| x.0.to_string()))
