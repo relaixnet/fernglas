@@ -164,13 +164,16 @@ pub async fn run_client(
         .name_override
         .or(init_msg.sys_name)
         .unwrap_or(client_addr.ip().to_string());
+    let client_router_id = cfg
+        .router_id_override
+        .or(first_peer_up.msg1.router_id);
     store
         .client_up(
             client_addr,
             RouteState::Selected,
             Client {
                 client_name,
-                router_id: first_peer_up.msg1.router_id,
+                router_id: client_router_id,
             },
         )
         .await;
@@ -210,6 +213,7 @@ pub async fn run_client(
 #[derive(Debug, Clone, Deserialize)]
 pub struct PeerConfig {
     pub name_override: Option<String>,
+    pub router_id_override: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
