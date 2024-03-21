@@ -164,9 +164,11 @@ pub async fn run_client(
         .name_override
         .or(init_msg.sys_name)
         .unwrap_or(client_addr.ip().to_string());
-    let client_router_id = cfg
-        .router_id_override
-        .or(first_peer_up.msg1.router_id);
+    let client_router_id = if cfg.router_id_override.is_some() {
+        cfg.router_id_override.unwrap().parse().expect("Cannot parse router_id_override to an IPv4 address!")
+    } else {
+        first_peer_up.msg1.router_id
+    };    
     store
         .client_up(
             client_addr,
