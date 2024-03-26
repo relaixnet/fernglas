@@ -16,6 +16,8 @@ use zettabgp::bmp::prelude::{
     BmpMessagePeerDown, BmpMessagePeerHeader, BmpMessageRouteMonitoring, BmpMessageTermination,
 };
 use zettabgp::bmp::BmpMessage;
+use zettabgp::message::attributes::BgpAttrItem;
+use zettabgp::afi::{BgpAddrs, BgpRD};
 
 fn table_selector_for_peer(
     client_addr: SocketAddr,
@@ -168,6 +170,10 @@ pub async fn run_client(
         Some(router_id) => router_id,
         None => first_peer_up.msg1.router_id
     };
+    let mut rd_filters: Vec<BgpRD> = vec![];
+    if let Some(cfg_rd_filters) = cfg.rd_filters {
+       cfg_rd_filters.iter().for_each(|filter| rd_filters.push(filter.as_str().parse().expect("Failed to parse RD-Filters!"))); 
+    };
     store
         .client_up(
             client_addr,
@@ -192,6 +198,50 @@ pub async fn run_client(
 
         match msg {
             BmpMessage::RouteMonitoring(rm) => {
+                if !rd_filters.is_empty() {
+                    let mut skip_update = false;
+                    for attr in &rm.update.attrs {
+                        match attr {
+                            BgpAttrItem::MPUpdates(update) => {
+                                match &update.addrs {
+                                    BgpAddrs::VPNV4U(addrs) => {
+                                        for addr in addrs {
+                                            if !rd_filters.contains(&addr.prefix.rd) {
+                                                skip_update = true;
+                                            };
+                                        };
+                                    },
+                                    BgpAddrs::VPNV4UP(addrs) => {
+                                        for addr in addrs {
+                                            if !rd_filters.contains(&addr.nlri.prefix.rd) {
+                                                skip_update = true;
+                                            };
+                                        };
+                                    },
+                                    BgpAddrs::VPNV6U(addrs) => {
+                                        for addr in addrs {
+                                            if !rd_filters.contains(&addr.prefix.rd) {
+                                                skip_update = true;
+                                            };
+                                        };
+                                    },
+                                    BgpAddrs::VPNV6UP(addrs) => {
+                                        for addr in addrs {
+                                            if !rd_filters.contains(&addr.nlri.prefix.rd) {
+                                                skip_update = true;
+                                            };
+                                        };
+                                    },
+                                    _ => {}
+                                };
+                            },
+                            _ => {}
+                        };
+                    };
+                    if skip_update {
+                        continue;
+                    };
+                };
                 let channel = channels.entry(rm.peer.peeraddress).or_insert_with(|| {
                     warn!("the bmp device {} sent a message for a nonexisting peer, we'll initialize the table now: {:?}", &client_addr, &rm);
                     run_peer(client_addr, rm.peer.clone(), store)
@@ -215,6 +265,7 @@ pub async fn run_client(
 pub struct PeerConfig {
     pub name_override: Option<String>,
     pub router_id_override: Option<Ipv4Addr>,
+    pub rd_filters: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
